@@ -1,17 +1,16 @@
 #! /usr/bin/python
 import click as clk
-from collections import defaultdict
 import datetime as dtm
 import numpy as np
 import os
 import os.path as osp
 import re
 from subprocess import call
-import time
 
-EDITOR = os.environ.get('EDITOR','vim') #that easy!
-
+from fastcache import clru_cache as cache
 import yaml
+
+EDITOR = os.environ.get('EDITOR', 'vim')
 
 RE_ANSI = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
 RE_LOG = re.compile(r'^([0-9]{2}) ([0-9]{2}:[0-9]{2}) - (.*?)(?:$| x(.*?)$)')
@@ -19,21 +18,30 @@ RE_LOG = re.compile(r'^([0-9]{2}) ([0-9]{2}:[0-9]{2}) - (.*?)(?:$| x(.*?)$)')
 CONFIG_PATH = osp.join(osp.expanduser('~'), '.config/nutrition/')
 CFG_FN = osp.join(CONFIG_PATH, 'config.yaml')
 RCP_FN = osp.join(CONFIG_PATH, 'recipes.yaml')
-GOL_FN = osp.join(CONFIG_PATH, 'goal.yaml')
-    
+GOAL_FN = osp.join(CONFIG_PATH, 'goal.yaml')
+
 
 import nutrients as ntr
 
 
+@cache(maxsize=1)
 def read_config():
     with open(CFG_FN, 'r') as f:
         d = yaml.load(f)
     return d
 
-cfg = read_config()
-with open(GOL_FN, 'r') as f:
-    GOAL = yaml.load(f)[cfg['goal']]
-    FILT = list(GOAL.keys())
+
+def read_goal():
+    cfg = read_config()
+    goal = cfg['goal']
+    with open(GOAL_FN, 'r') as f:
+        g = yaml.load(f)
+    try:
+        return g[goal]
+    except KeyError:
+        clk.echo('goal {} not found'.format(clk.style(goal, fg='red')))
+
+
 
 def get_logfn(month=None):
     LOG_FN = osp.join(CONFIG_PATH, '{}-log.txt')
@@ -66,9 +74,6 @@ def pp_nutrients(nuts, amount=ntr.DG):
     return '\n'.join(itms)
 
 
-STR_G = mk_header('values for {}'.format(clk.style('{} g', fg='red')))
-
-
 @clk.command()
 @clk.argument('name')
 def find(name):
@@ -89,35 +94,34 @@ def find(name):
 
 
 @clk.command()
-@clk.argument('dbno', nargs=1)
+@clk.argument('query', nargs=1)
 @clk.argument('amount', nargs=1, required=False)
-@clk.option('-a', is_flag=True, default=False)
-def info(dbno, **kwargs):
-    rcp = ntr.is_recipe(dbno) or ntr.is_usda_food(dbno)
+def info(query, **kwargs):
+    rcp = ntr.is_recipe(query) or ntr.is_food(query)
 
     amount = kwargs['amount']
     if amount is None:
         amount = ntr.DG if not rcp else 1
     else:
         amount = float(amount)
-    adv = kwargs['a']
 
     if rcp:
-        nl = ntr.get_nutrients(dbno)
-        out = 'looking up {}'.format(clk.style(dbno, fg='magenta'))
+        nl = ntr.get_nutrients(query)
+        out = 'looking up {}'.format(clk.style(query, fg='magenta'))
     else:
-        name, info = ntr.get_usda_nutrients(dbno, advanced=bool(adv))
-        nl = ntr.NutrientList()
-        nl.add((name, info))
-        out = 'looking up [{:5s}] {}'.format(clk.style(str(dbno), fg='yellow'),
+        name, info = ntr.get_usda_nutrients(query)
+        nl = ntr.NutrientList((name, info))
+        out = 'looking up [{:5s}] {}'.format(clk.style(str(query),
+                                                       fg='yellow'),
                                              clk.style(name, fg='cyan'))
-    print(nl.contents)
     nl *= (amount/(ntr.DG if not rcp else 1))
-    print(nl.contents)
+    nl.balance()
 
     out = mk_header(out)
     if not rcp:
-        out += STR_G.format(int(amount))
+        out += mk_header('values for {}'
+                         .format(clk.style(str(int(amount)) + ' g',
+                                           fg='red')))
         out += nl.print(p=False)
     else:
         out += nl.print(p=False)
@@ -129,44 +133,71 @@ def info(dbno, **kwargs):
 @clk.argument('dbno1', nargs=1, required=True)
 @clk.argument('dbno2', nargs=1, required=True)
 @clk.argument('amount', nargs=1, required=False)
-@clk.option('-a', is_flag=True, default=False)
+@clk.option('-t', nargs=1, default=1.1)
+@clk.option('-n', is_flag=True, nargs=1, default=False)
+@clk.option('-nz', is_flag=True, nargs=1, default=False)
 def compare(dbno1, dbno2, **kwargs):
-    adv = kwargs['a']
-    n1, i1 = ntr.get_usda_nutrients(dbno1, advanced=adv)
-    n2, i2 = ntr.get_usda_nutrients(dbno2, advanced=adv)
-    out = mk_header('comparing')
-    out += mk_header('{} [{:5s}] {} [{:5s}] {}'
-                     .format(clk.style(n1, fg='cyan'),
-                             clk.style(dbno1, fg='yellow'),
-                             clk.style('vs', fg='red'),
-                             clk.style(dbno2, fg='yellow'),
-                             clk.style(n2, fg='cyan')))
-    out += STR_G.format(ntr.DG)
-    # TODO: this is a fucking mess
-    nuts = sorted(set(n for n, v, u in i1) | set(n for n, v, u in i2))
-    d1 = dict((n, (v, u)) for n, v, u in i1)
-    d2 = dict((n, (ntr.uconv(u, d1.get(n, (0, ''))[1])*v, u))
-              for n, v, u in i2)
+    thr = max(float(kwargs['t']), 1.)
+    norm = kwargs['n']
+    nz = kwargs['nz']
+    amt = ntr.DG if kwargs['amount'] is None else float(kwargs['amount'])
+    if ntr.is_food(dbno1) or ntr.is_recipe(dbno1):
+        nl1 = ntr.get_nutrients(dbno1)
+        h1 = clk.style(dbno1, fg='magenta')
+    else:
+        nl1 = ntr.NutrientList(ntr.get_usda_nutrients(dbno1))
+        h1 = '{} [{:5s}]'.format(clk.style(nl1.self.contents[0][0],
+                                           fg='cyan'),
+                                 clk.style(dbno1, fg='yellow'))
 
-    vals = {n: (d1.get(n, (0,))[0], d2.get(n, (0,))[0]) for n in nuts}
-    cmps = {n: (-1 if 1.05*v1 < v2 else (1 if v1 > 1.05*v2 else 0))
-            for n, (v1, v2) in vals.items() if not (np.isclose(v1, 0) and
-                                                    np.isclose(v2, 0))}
-    ks = list(vals.keys())
-    for k in ks:
-        if k not in cmps:
-            vals.pop(k)
-    cls1 = {-1: 'red', 0: 'white', 1: 'green'}
-    cls2 = {-1: 'green', 0: 'white', 1: 'red'}
+    if ntr.is_food(dbno2) or ntr.is_recipe(dbno2):
+        nl2 = ntr.get_nutrients(dbno2)
+        h2 = clk.style(dbno2, fg='magenta')
+    else:
+        nl2 = ntr.NutrientList(ntr.get_usda_nutrients(dbno2))
+        h2 = '{} [{:5s}]'.format(clk.style(nl2.self.contents[0][0],
+                                           fg='cyan'),
+                                 clk.style(dbno2, fg='yellow'))
 
+    out = mk_header('comparing at {} threshold'
+                    .format(clk.style('{:3.1f}'.format(thr), fg='blue')))
+    out += mk_header('{} {} {}'.format(h1, clk.style('vs'), h2))
+    out += mk_header('values for {}'
+                     .format(clk.style(str(int(amt)) + ' ' +
+                                       ('kcal' if norm else 'g'),
+                                       fg='yellow')))
+
+    joint_keys = set(k for k in nl1.vals.keys()) |\
+        set(k for k in nl2.vals.keys())
+    vals1 = {k: (nl1.vals[k]/((nl1.vals['energy']/amt).val if norm else 1)
+             if k in nl1.vals
+             else ntr.Amount(0., nl2.vals[k].unit)) for k in joint_keys}
+    vals2 = {k: (nl2.vals[k]/((nl2.vals['energy']/amt).val if norm else 1)
+             if k in nl2.vals
+             else ntr.Amount(0., nl1.vals[k].unit)) for k in joint_keys}
+
+    cls1 = {k: ('green' if vals1[k] > thr*vals2[k] else
+            ('red' if thr*vals1[k] < vals2[k] else 'yellow'))
+            for k in joint_keys}
+    cls2 = {k: ('green' if cls1[k] == 'red' else
+            ('red' if cls1[k] == 'green' else 'yellow'))
+            for k in joint_keys}
     itms = ['{: >40s}: {: >20s} | {: <20} {}'
-            .format(n,
-                    clk.style('{: >8.3f}'.format(v1), fg=cls1[cmps[n]]),
-                    clk.style('{: <8.3f}'.format(v2), fg=cls2[cmps[n]]),
-                    d1.get(n, d2[n])[1])
-            for n, (v1, v2) in sorted(vals.items())]
+            .format(k,
+                    clk.style('{: >8.3f}'.format(vals1[k]
+                                                 .convert(vals2[k].unit).val),
+                              fg=cls1[k]),
+                    clk.style('{: <8.3f}'.format(vals2[k].val),
+                              fg=cls2[k]),
+                    vals2[k].unit)
+            for k in sorted(joint_keys, key=ntr.sort_nutrs)
+            if not np.isclose(vals1[k].val + vals2[k].val, 0) and
+            cls1[k] != 'yellow' and
+            (not nz or (not np.isclose(vals1[k].val, 0) and
+                        not np.isclose(vals2[k].val, 0)))]
+
     out += '\n'.join(itms)
-    clk.echo(out)
+    clk.echo_via_pager(out)
 
 
 @clk.command()
@@ -206,7 +237,7 @@ def eat(food, qty, **kwargs):
             qty = '-' + qty[1:]
         if qty.startswith('x'):
             qty = qty[1:]
-        logstr += ' x{:3.1f}'.format(float(qty))
+        logstr += ' x{:4.2f}'.format(float(qty))
     logstr += '\n'
 
     open(lfn, 'a').close()
@@ -223,30 +254,59 @@ def eat(food, qty, **kwargs):
 @clk.command()
 @clk.argument('nutrs', nargs=-1, required=False)
 @clk.option('--month')
+@clk.option('-d', is_flag=True)
 def review(nutrs, **kwargs):
     month = kwargs['month']
+    delta = kwargs['d']
     lns = get_loglines(month)
 
     if month is None:
         month = dtm.datetime.now().isoformat()[:7]
 
-    cfg = read_config()
+    cfg = read_config()['reports']
     if not nutrs:
         line_nutrs = cfg['summary']
+    elif len(nutrs) == 1 and nutrs[0] in cfg:
+        line_nutrs = cfg[nutrs[0]]
     else:
         line_nutrs = nutrs
+    goal = read_goal()
+    min_amts = {k: ntr.Amount(v['min'], v.get('unit', 'g'))
+                for k, v in goal.items() if 'min' in v}
+    max_amts = {k: ntr.Amount(v['max'], v.get('unit', 'g'))
+                for k, v in goal.items() if 'max' in v}
 
     out = mk_header('log for {}'.format(clk.style(month, fg='yellow')))
-    out += ' '*40 + (' | '.join(['{: ^23s}' for _ in line_nutrs])
+    out += ' '*40 + (' | '.join(['{: ^22s}' for _ in line_nutrs])
                           .format(*[clk.style(ln, fg='blue')
                                     for ln in line_nutrs]) + '\n')
 
     cur_day = lns[0][0]
     nl = ntr.NutrientList()
+    nlg = ntr.NutrientList((goal, [(n, amt.val, amt.unit)
+                            for n, amt in min_amts.items()]))
     for ln in lns:
         if ln[0] > cur_day:
-            out += ('{:-^49s}'.format(clk.style('   TOTAL   ', fg='red'))
-                    + nl.get_line(line_nutrs))
+            nl.balance()
+            fd = {n: ('green'
+                      if (n not in min_amts or amt > min_amts[n]) and
+                      (n not in max_amts or amt < max_amts[n])
+                      else ('magenta' if n in max_amts and amt > max_amts[n]
+                            else 'red'))
+                      for n, amt in nl.vals.items()}
+            bd = {n: ('black'
+                      if (n not in max_amts or amt < max_amts[n])
+                      else 'black') for n, amt in nl.vals.items()}
+            if delta:
+                out += ('{:-^49s}'.format(clk.style('   GOAL   ', fg='green'))
+                        + nlg.get_line(line_nutrs) + '\n')
+
+            out += ('{:-^49s}'.format(clk.style('   {}   '
+                                                .format('TOTAL' if not delta
+                                                        else 'DELTA'),
+                                                fg='red'))
+                    + nl.get_line(line_nutrs, fg=fd, bg=bd,
+                                  target=(min_amts if delta else None)))
             out += '\n\n'
             cur_day = ln[0]
             nl = ntr.NutrientList()
@@ -261,29 +321,43 @@ def review(nutrs, **kwargs):
             sub_out += ' x{}'.format(ln[3])
         sub_out += '   '
         out += '{:-<40s}'.format(sub_out) + sub_nl.get_line(line_nutrs,
-                                                            color=False)
+                                                            fg=False)
         out += '\n'
+    nl.balance()
     out += ('{:-^49s}'.format(clk.style('   SUBTOTAL   ', fg='red')) +
-            nl.get_line(line_nutrs))
+            nl.get_line(line_nutrs) + '\n')
+    out += ('{:-^49s}'.format(clk.style('   GOAL   ', fg='green'))
+            + nlg.get_line(line_nutrs) + '\n')
     out += '\n\n'
 
     clk.echo_via_pager(out)
 
 
 @clk.command()
-@clk.argument('month', required=False)
+@clk.option('-m', nargs=1)
+@clk.argument('file', nargs=1)
 def edit(**kwargs):
-    call([EDITOR, get_logfn(kwargs['month'])])
-
-
-@clk.command()
-def report():
-    pass
+    f = kwargs['file']
+    if f is None:
+        fn = get_logfn(kwargs['m'])
+    if f is not None:
+        f = f.lower()
+        if f == 'recipe' or f == 'recipes':
+            fn = RCP_FN
+        elif f == 'goal' or f == 'goals':
+            fn = GOAL_FN
+        elif f == 'config':
+            fn = CFG_FN
+        else:
+            fn = get_logfn(kwargs['m'])
+            
+    call([EDITOR, fn])
 
 
 @clk.group()
 def main():
     pass
+
 main.add_command(find)
 main.add_command(info)
 main.add_command(compare)
@@ -292,4 +366,8 @@ main.add_command(review)
 main.add_command(edit)
 
 if __name__ == '__main__':
+    # from pycallgraph import PyCallGraph
+    # from pycallgraph.output import GraphvizOutput
+
+    # with PyCallGraph(output=GraphvizOutput()):
     main()
