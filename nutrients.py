@@ -88,7 +88,7 @@ AGGR_TAB = {'omega-3': ['ala', 'epa', 'dha', 'dpa'],
 DG = 100
 
 # TODO: fix circular import
-import interface as ifc
+import food as ifc
 
 CACHE_FN = osp.join(ifc.CONFIG_PATH, 'cache.json')
 if not osp.isfile(CACHE_FN):
