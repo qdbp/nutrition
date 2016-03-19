@@ -1,11 +1,14 @@
 #! /usr/bin/python
 import click as clk
 import datetime as dtm
+import itertools as itr
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import os.path as osp
 import re
 from subprocess import call
+import traceback as trc
 
 from fastcache import clru_cache as cache
 import yaml
@@ -17,10 +20,27 @@ RE_LOG = re.compile(r'^([0-9]{2}) ([0-9]{2}:[0-9]{2}) - (.*?)(?:$| x(.*?)$)')
 
 CONFIG_PATH = osp.join(osp.expanduser('~'), '.config/nutrition/')
 CFG_FN = osp.join(CONFIG_PATH, 'config.yaml')
+if not osp.isfile(CFG_FN):
+    with open(CFG_FN, 'w') as f:
+        with open('./example-config.yaml', 'r') as g:
+            f.write(g.read())
 RCP_FN = osp.join(CONFIG_PATH, 'recipes.yaml')
+if not osp.isfile(CFG_FN):
+    with open(RCP_FN, 'w') as f:
+        with open('./example-recipes.yaml', 'r') as g:
+            f.write(g.read())
 GOAL_FN = osp.join(CONFIG_PATH, 'goal.yaml')
+if not osp.isfile(CFG_FN):
+    with open(GOAL_FN, 'w') as f:
+        with open('./example-goal.yaml', 'r') as g:
+            f.write(g.read())
+PLAN_FN = osp.join(CONFIG_PATH, 'plan.yaml')
+if not osp.isfile(PLAN_FN):
+    with open(CFG_FN, 'w') as f:
+        with open('./example-plan.yaml', 'r') as g:
+            f.write(g.read())
 
-
+#TODO: fix circular imports
 import nutrients as ntr
 
 
@@ -42,18 +62,38 @@ def read_goal():
         clk.echo('goal {} not found'.format(clk.style(goal, fg='red')))
 
 
-
 def get_logfn(month=None):
-    LOG_FN = osp.join(CONFIG_PATH, '{}-log.txt')
+    fn = osp.join(CONFIG_PATH, '{}-log.txt')
     if month is None:
         month = dtm.datetime.now().isoformat()[:7]
-    return LOG_FN.format(month)
+    return fn.format(month)
 
 
 def get_loglines(month=None):
     with open(get_logfn(month), 'r') as f:
         lines = list(f.readlines())
     return [RE_LOG.findall(line)[0] for line in lines if line]
+
+
+def get_loglines_span(start, end):
+    months = sorted(set([(start + dtm.timedelta(days=x)).isoformat()[:7]
+                         for x in range(int((end - start)
+                                            .total_seconds()/83600))]))
+    lls = []
+    for m in months:
+        try:
+            ll = get_loglines(m)
+            for l in ll:
+                ld = dtm.datetime.strptime('{}_{}_{}'
+                                           .format(months[0], l[0], l[1]),
+                                           '%Y-%m_%d_%H:%M')
+                if ld < start or ld > end:
+                    continue
+                lls.append(l)
+        except:
+            trc.print_exc()
+            continue
+    return lls
 
 
 def mk_header(s, pad=100):
@@ -146,18 +186,20 @@ def compare(dbno1, dbno2, **kwargs):
         h1 = clk.style(dbno1, fg='magenta')
     else:
         nl1 = ntr.NutrientList(ntr.get_usda_nutrients(dbno1))
-        h1 = '{} [{:5s}]'.format(clk.style(nl1.self.contents[0][0],
+        h1 = '{} [{:5s}]'.format(clk.style(nl1.contents[0][0],
                                            fg='cyan'),
                                  clk.style(dbno1, fg='yellow'))
+        nl1.balance()
 
     if ntr.is_food(dbno2) or ntr.is_recipe(dbno2):
         nl2 = ntr.get_nutrients(dbno2)
         h2 = clk.style(dbno2, fg='magenta')
     else:
         nl2 = ntr.NutrientList(ntr.get_usda_nutrients(dbno2))
-        h2 = '{} [{:5s}]'.format(clk.style(nl2.self.contents[0][0],
+        h2 = '{} [{:5s}]'.format(clk.style(nl2.contents[0][0],
                                            fg='cyan'),
                                  clk.style(dbno2, fg='yellow'))
+        nl2.balance()
 
     out = mk_header('comparing at {} threshold'
                     .format(clk.style('{:3.1f}'.format(thr), fg='blue')))
@@ -335,10 +377,10 @@ def review(nutrs, **kwargs):
 
 @clk.command()
 @clk.option('-m', nargs=1)
-@clk.argument('file', nargs=1)
+@clk.argument('file', nargs=1, required=False)
 def edit(**kwargs):
     f = kwargs['file']
-    if f is None:
+    if f is None or f == 'log':
         fn = get_logfn(kwargs['m'])
     if f is not None:
         f = f.lower()
@@ -348,10 +390,31 @@ def edit(**kwargs):
             fn = GOAL_FN
         elif f == 'config':
             fn = CFG_FN
+        elif f == 'plan':
+            fn = PLAN_FN
         else:
-            fn = get_logfn(kwargs['m'])
-            
+            print('{} is not a known file!'.format(clk.style(f, fg='red')))
+
     call([EDITOR, fn])
+
+
+@clk.command()
+@clk.option('-s', nargs=1, default=dtm.datetime.now() - dtm.timedelta(days=8))
+@clk.option('-e', nargs=1, default=dtm.datetime.now() - dtm.timedelta(days=1))
+def stats(**kwargs):
+    lls = get_loglines_span(kwargs['s'], kwargs['e'])
+    days = itr.groupby(lls, key=lambda x: x[0])
+    dnl = []
+    for day, ate in days:
+        nl = ntr.NutrientList()
+        for ln in ate:
+            mult = (float(ln[3]) if ln[3] else 1)
+            nl += mult * ntr.get_nutrients(ln[2])
+        dnl.append((day, nl))
+    cals = [nl.vals['energy'].val for nl in dnl]
+    plt.plot(cals)
+
+    print(dnl)
 
 
 @clk.group()
@@ -364,10 +427,7 @@ main.add_command(compare)
 main.add_command(eat)
 main.add_command(review)
 main.add_command(edit)
+main.add_command(stats)
 
 if __name__ == '__main__':
-    # from pycallgraph import PyCallGraph
-    # from pycallgraph.output import GraphvizOutput
-
-    # with PyCallGraph(output=GraphvizOutput()):
     main()

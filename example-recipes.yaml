@@ -1,0 +1,184 @@
+# some random recipes from the master himself to get you started
+# top-level table names cannot be changed
+usda foods:
+    # misc
+    salt: 2047
+    # sugars
+    b sugar: 19334
+    # legumes 
+    beans: 16033
+    # dairy
+    cheese: 1009
+    milk 1%: 1082
+    milk 2%: 1079
+    # carbs
+    bagel: 18968
+    boiled white rice: 20055
+    oats: 20038
+    pasta: 20420
+    quinoa: 20035
+    ww bread: 18075
+    # meats+
+    chicken breast: 5062
+    egg: 1123
+    tilapia: 15261
+    pork sausage: 7064
+    oyster mushroom: 11987
+    # greens
+    avocado: 9037
+    apple gs: 9502
+    bell pepper: 11333
+    banana: 9040
+    grape: 9130
+    onion: 11282
+    olive: 9195
+    parsley: 11297
+    potato: 11354
+    spinach: 11457
+    tomato: 11529
+    # nuts
+    almonds: 12061
+    flaxseed: 12220
+    peanuts: 16390
+    sunflower seeds: 12036
+    # oils
+    oil: 4506
+    olive oil: 4053
+    # sauces
+    tomato sauce: 11549
+    # drinks
+    oj: 9206
+    # junk
+    cream cheese: 1017
+    pizza: 21272
+
+usda corrections:
+    almonds:
+        v B7: 64 ug
+    peanuts:
+        v B7: 72 ug
+    milk 1%:
+        iodine: 22 ug
+    milk 2%:
+        iodine: 22 ug
+
+# all amounts in grams
+recipes:
+    avocado sandwich:
+        ww bread: 64
+        avocado: 130
+    cheese sandwich:
+        ww bread: 64
+        cheese: 45
+    meategg ambrosia:
+        onion: 130
+        pork sausage: 200
+        egg: 200
+        tomato: 100
+        oil: 12
+    chickenegg ambrosia:
+        salt: 2
+        onion: 130
+        chicken breast: 200
+        egg: 100
+        tomato: 100
+        oil: 12
+        oyster mushroom: 25
+    chicken pasta:
+        chicken breast: 200
+        pasta: 100
+        tomato sauce: 25
+        oil: 10
+    soylent:
+        flaxseed: 6
+        peanuts: 6
+        sunflower seeds: 6
+        almonds: 25
+        milk 1%: 500
+        oats: 80
+    soylent2:
+        flaxseed: 6
+        peanuts: 6
+        sunflower seeds: 6
+        almonds: 25
+        milk 2%: 500
+        oats: 80
+    tilapia and potato:
+        potato: 400
+        tilapia: 190
+        salt: 0.02
+        oil: 12
+    spinach avocado salad:
+        avocado: 150
+        spinach: 25
+        olive oil: 12
+        tomato: 100
+        bell pepper: 120
+        salt: 2
+    spinach egg salad:
+        egg: 100
+        spinach: 25
+        olive oil: 12
+        tomato: 100
+        bell pepper: 120
+        salt: 2
+    # restaurant dishes
+    korean beef rice:
+        boiled white rice: 300
+        chicken breast: 75
+        oil: 15
+    # test dishes
+    test recipe:
+        almonds: 200
+        tomato: 1
+        test food: 50
+        tsr: 2
+    test subrecipe:
+        oil: 125
+
+# only recipes can have aliases
+alias:
+    as: avocado sandwich
+    cs: cheese sandwich
+    mea: meategg ambrosia
+    cea: chickenegg ambrosia
+    # test aliases
+    tsr: test subrecipe
+
+# enter values for 100g
+custom foods:
+    fat yogurt:
+        - energy: 114 kcal
+        - fat: 10.3
+        - cholesterol: 37 mg
+        - sodium: 45 mg
+        - protein: 3.4
+    vitamin0:
+        - v A: 1600 IU
+        - beta carotene: 0.000150
+        - v B1: 0.0012
+        - v B2: 0.0014
+        - v B3: 0.01
+        - v B5: 0.005
+        - v B6: 0.0017
+        - v B7: 0.00002
+        - v B9: 0.0003
+        - v B12: 0.000005
+        - v C: 0.06
+        - v D: 400 IU
+        - v E: 0.01
+        - Ca: 0.162
+        - Cu: 0.000035
+        - I: 0.000133
+        - Fe: 0.004
+    empty carbs:
+        - energy: 400 kcal
+        - carbs: 100
+    fish oil:
+        - dha: 120 mg
+        - epa: 180 mg
+    # test foods
+    test food:
+        - energy: 500 kcal
+        - protein: 50
+        - Se: 100 mg

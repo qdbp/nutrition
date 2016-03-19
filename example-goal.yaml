@@ -1,0 +1,141 @@
+# based on USDA recommended daily intake, men 19-50, 2400 kcal/d
+# with some modifications
+main:
+    energy:
+        unit: kcal
+        min: 2750
+        min_scale: 1.0
+        max: 3000
+        max_scale: 1.0
+        cost: linear
+    carbs:
+        min: 250
+    protein:
+        min: 150
+        min_scale: 1.2
+        max: 200
+    fat:
+        min: 120
+        max: 150
+    saturated fat: {}
+    monosaturated fat: {}
+    polyunsaturated fat: {}
+    epa+dha+dpa:
+        min: 400
+        unit: mg
+        min-scale: 1.5
+    omega-6:
+        min: 17
+    fibre:
+        min: 38
+        min-scale: 1.2
+    soluble-fiber: {}
+    insoluble-fiber: {}
+    choleseterol:
+        unit: mg
+        max: 300
+        max_scale: 0.3
+    Ca:
+        min: 1
+        max: 2.5
+        max_scale: 2
+    Cl:
+        min: 1
+        max: 2.5
+    Cu:
+        unit: mg
+        min: 0.9
+        min_scale: 2
+        max: 10
+    I:
+        unit: ug
+        min: 150
+        min_scale: 2
+        max: 1100
+    Fe:
+        unit: mg
+        min: 8
+        min_scale: 1.5
+        max: 45
+    Mg:
+        unit: mg
+        min: 420
+        min_scale: 1.5
+    Mn:
+        unit: mg
+        min: 2.3
+        max: 20
+    Mo:
+        unit: ug
+        min: 45
+        max: 2000
+    P:
+        min: 0.7
+        max: 4
+    K:
+        min: 3.5
+    Se:
+        unit: ug 
+        min: 55
+        max: 400
+    Na:
+        min: 1.5
+        max: 2.3
+        max_scale: 0.3
+    # TODO: review
+    S:
+        min: 2
+    Zn:
+        unit: mg
+        min: 11
+        max: 40
+    v A:
+        unit: IU
+        min: 3000
+        max: 10000
+    v B1: 
+        unit: mg
+        min: 1.2
+    v B2: 
+        unit: mg
+        min: 1.3
+    v B3: 
+        unit: mg
+        min: 16
+        max: 35
+    v B5: 
+        unit: mg
+        min: 5
+    v B6: 
+        unit: mg
+        min: 1.3
+        max: 100
+    v B7: 
+        unit: ug
+        min: 30
+    v B9: 
+        unit: ug
+        min: 400
+        max: 1000
+    v B12: 
+        unit: ug
+        min: 2.4
+    v C: 
+        unit: mg
+        min: 90
+        max: 2000
+    v D: 
+        unit: IU
+        min: 1000
+        max: 4000
+    v E: 
+        unit: mg
+        min: 18
+        max: 9000
+    v K: 
+        unit: ug
+        min: 120
+    choline: 
+        unit: mg
+        min: 550
+        max: 3500

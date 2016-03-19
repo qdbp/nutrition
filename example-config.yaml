@@ -1,0 +1,47 @@
+goal: main
+# do not delete the summary report; feel free to edit it
+reports:
+    summary:
+        - energy
+        - protein
+        - carbs
+        - fat
+        - fibre
+    fats:
+        - fat
+        - epa+dha+dpa
+        - omega-6
+        - sfa
+        - mufa
+        - pufa
+        - trans
+    vits:
+        - v A
+        - v C
+        - v D
+        - v E
+        - v K
+        - v B1
+        - v B2
+        - v B5
+        - v B6
+        - v B7
+        - v B9
+        - v B12
+    mins:
+        - Fe
+        - I
+        - Ca
+        - K
+        - Mg
+        - Mn
+        - Cu
+        - P
+        - Se
+        - Na
+# TODO: unused
+report:
+    - energy
+    - protein
+    - carbs
+    - fat

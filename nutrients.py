@@ -87,10 +87,13 @@ AGGR_TAB = {'omega-3': ['ala', 'epa', 'dha', 'dpa'],
 # default gram amount
 DG = 100
 
+# TODO: fix circular import
 import interface as ifc
 
 CACHE_FN = osp.join(ifc.CONFIG_PATH, 'cache.json')
-RCP_FN = osp.join(ifc.CONFIG_PATH, 'recipes.yaml')
+if not osp.isfile(CACHE_FN):
+    with open(CACHE_FN, 'w') as f:
+        json.dump({}, f)
 
 
 @total_ordering
