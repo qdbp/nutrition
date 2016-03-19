@@ -94,6 +94,7 @@ CACHE_FN = osp.join(ifc.CONFIG_PATH, 'cache.json')
 if not osp.isfile(CACHE_FN):
     with open(CACHE_FN, 'w') as f:
         json.dump({}, f)
+RCP_FN = ifc.RCP_FN
 
 
 @total_ordering
