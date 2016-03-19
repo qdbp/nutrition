@@ -25,22 +25,22 @@ if not osp.isfile(CFG_FN):
         with open('./example-config.yaml', 'r') as g:
             f.write(g.read())
 RCP_FN = osp.join(CONFIG_PATH, 'recipes.yaml')
-if not osp.isfile(CFG_FN):
+if not osp.isfile(RCP_FN):
     with open(RCP_FN, 'w') as f:
         with open('./example-recipes.yaml', 'r') as g:
             f.write(g.read())
 GOAL_FN = osp.join(CONFIG_PATH, 'goal.yaml')
-if not osp.isfile(CFG_FN):
+if not osp.isfile(GOAL_FN):
     with open(GOAL_FN, 'w') as f:
         with open('./example-goal.yaml', 'r') as g:
             f.write(g.read())
 PLAN_FN = osp.join(CONFIG_PATH, 'plan.yaml')
 if not osp.isfile(PLAN_FN):
-    with open(CFG_FN, 'w') as f:
+    with open(PLAN_FN, 'w') as f:
         with open('./example-plan.yaml', 'r') as g:
             f.write(g.read())
 
-#TODO: fix circular imports
+# TODO: fix circular imports
 import nutrients as ntr
 
 
